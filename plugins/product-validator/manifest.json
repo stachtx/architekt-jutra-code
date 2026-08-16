@@ -1,0 +1,14 @@
+{
+  "name": "Product Validator",
+  "version": "1.0.0",
+  "url": "http://localhost:3011",
+  "description": "AI-powered validation of product description, category fit, and price vs market norms",
+  "extensionPoints": [
+    {
+      "type": "product.detail.tabs",
+      "label": "AI Validation",
+      "path": "/product-tab",
+      "priority": 80
+    }
+  ]
+}

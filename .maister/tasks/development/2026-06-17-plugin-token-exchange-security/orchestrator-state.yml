@@ -1,0 +1,147 @@
+orchestrator:
+  started_phase: phase-7
+  completed_phases: [phase-1, phase-2, phase-5, phase-6]
+  failed_phases: []
+  auto_fix_attempts:
+    phase-1: 0
+    phase-2: 0
+    phase-5: 0
+    phase-7: 0
+    phase-8: 0
+    phase-11: 0
+  options:
+    spec_audit_enabled: true
+    skip_test_suite: false
+    e2e_enabled: false
+    user_docs_enabled: false
+    code_review_enabled: true
+    pragmatic_review_enabled: true
+    reality_check_enabled: true
+    production_check_enabled: true
+  created: "2026-06-17T20:05:00Z"
+  updated: "2026-06-17T20:05:00Z"
+  task_path: .maister/tasks/development/2026-06-17-plugin-token-exchange-security
+  task_ids:
+    phase-1: "1"
+    phase-2: "2"
+    phase-5: "3"
+    phase-6: "4"
+    phase-7: "5"
+    phase-8: "6"
+    phase-10: "7"
+    phase-11: "8"
+    phase-14: "9"
+
+task:
+  title: "Plugin Token Exchange Security — eliminacja forwardowania tokena użytkownika"
+  description: |
+    Wyeliminuj bezpośrednie przekazywanie tokena użytkownika z pluginów (server-sdk.ts) do backendu.
+    Zastąp Token Exchange wg RFC 8693 (On-Behalf-Of), analogicznie do istniejącego mechanizmu MCP.
+    Domknij fundamenty: egzekwowanie aud/iss, zakaz re-exchange, hardening logowania tokenów i sekretu JWT.
+  status: in_progress
+  tags:
+    - security
+    - oauth2
+    - token-exchange
+    - plugins
+  priority: high
+
+task_context:
+  risk_level: high
+  clarifications_resolved: true
+  scope_expanded: false
+  architecture_decision: "RFC 8693 Token Exchange / On-Behalf-Of (wariant B+C z researchu)"
+  task_characteristics:
+    has_reproducible_defect: false
+    modifies_existing_code: true
+    creates_new_entities: true
+    involves_data_operations: true
+    ui_heavy: false
+  architecture_decisions:
+    issuer_config_strategy: "A-app.issuer-property"
+    scope_naming: "A-reuse-mcp-scopes"
+    plugin_credentials_isolation: "A-shared-plugin-server-client"
+    logistics_plugin_scope: "A-browser-only-no-action"
+    aud_enforcement_scope: "A-conditional-iss-presence"
+  research_reference:
+    path: "C:\\Users\\tom-s\\.claude\\plans\\przeanalizuj-obecn-implementacj-autoryza-linked-cat.md"
+    research_question: "Bezpieczny mechanizm autoryzacji między MCP/pluginami a backendem — eliminacja forwardowania tokena użytkownika"
+    research_type: "mixed"
+    confidence_level: "high"
+  phase_summaries:
+    research:
+      summary: |
+        Research ujawnił, że MCP już stosuje RFC 8693 Token Exchange (165 testów, zweryfikowane).
+        Żywy anty-wzorzec to plugins/server-sdk.ts:56-69 — surowy Token-A przekazywany 1:1 do /api/*.
+        Krytyczne luki: T2 (logowanie pełnych tokenów), T3 (domyślny sekret JWT w repo),
+        T4 (brak egzekwowania aud/iss), T5 (re-exchange Token-B).
+      key_findings:
+        - "plugins/server-sdk.ts forwarduje surowy token użytkownika (Token-A) do /api/** — żywy passthrough"
+        - "OAuth2TokenFilter.java:166-167,330,69-71 loguje pełne tokeny na INFO"
+        - "app.jwt.secret zakodowany w application.properties (HS256 — sekret podpisuje I weryfikuje)"
+        - "JwtTokenProvider.parseToken() nie weryfikuje aud ani iss — separacja audience MCP jest kosmetyczna"
+        - "handleTokenExchangeGrant akceptuje Token-B jako subject_token (re-exchange, W2)"
+        - "Introspekcja nie sprawdza aud (W1)"
+        - "MCP Token Exchange już zaimplementowany i przetestowany (165 testów)"
+      recommended_approach: |
+        Rozszerzyć RFC 8693 Token Exchange ze ścieżki MCP na pluginy.
+        Każdy plugin = confidential OAuth2 client z seed Liquibase.
+        server-sdk wymienia Token-A na Token-B' (aud-restricted, downscoped, claim act).
+        Egzekwować aud/iss przy konsumpcji (permissive→strict via flaga).
+        Usunąć logowanie tokenów, sekret z env, zakaz re-exchange.
+    codebase_analysis:
+      key_files:
+        - "plugins/server-sdk.ts:50-70"
+        - "plugins/ai-description/src/pages/api/generate.ts:41"
+        - "plugins/product-validator/src/pages/api/validate.ts:48"
+        - "src/main/java/pl/devstyle/aj/core/oauth2/OAuth2TokenFilter.java:69-71,166-167,194,197-260"
+        - "src/main/java/pl/devstyle/aj/core/oauth2/OAuth2IntrospectionFilter.java:65"
+        - "src/main/java/pl/devstyle/aj/core/security/JwtTokenProvider.java:36-43,51-65,88-107"
+        - "src/main/java/pl/devstyle/aj/core/security/JwtAuthenticationFilter.java:28"
+        - "src/main/java/pl/devstyle/aj/core/security/SecurityConfiguration.java"
+        - "mcp-server/src/main/java/pl/devstyle/aj/mcp/security/McpIntrospectionFilter.java"
+        - "mcp-server/src/main/java/pl/devstyle/aj/mcp/security/TokenExchangeClient.java"
+        - "mcp-server/src/main/java/pl/devstyle/aj/mcp/config/RestClientConfig.java:81-96"
+        - "src/main/resources/application.properties"
+        - "src/main/resources/db/changelog/2026/010-seed-mcp-server-oauth2-client.yaml"
+        - "src/test/java/pl/devstyle/aj/core/oauth2/TokenExchangeIntegrationTests.java"
+        - "src/main/frontend/src/test/plugin-sdk-auth.test.ts"
+      primary_language: "Java (Spring Boot) + TypeScript (Next.js)"
+      report_path: "analysis/codebase-analysis.md"
+      complexity: "moderate"
+      summary: |
+        Własny serwer OAuth2 na customowych filtrach servlet (HS256 JWT). MCP: Token Exchange
+        wdrożony (McpIntrospectionFilter + TokenExchangeClient → Token-B) — wzorzec do replikacji.
+        Pluginy: trust-and-forward — server-sdk.ts linie 50-70 bierze Authorization header i wysyła 1:1.
+        Backend: parseToken() weryfikuje tylko podpis (brak aud/iss). Logowanie tokenów w OAuth2TokenFilter
+        linie 69-71, 166-167, 194. Sekret JWT hardcoded. plugin-sdk-auth.test.ts testuje błędne zachowanie
+        i musi być przepisany. 6 głównych plików do zmiany; MCP to działający szablon dla wszystkich zmian.
+    gap_analysis:
+      integration_points:
+        - "plugins/server-sdk.ts → /api/** (passthrough do zastąpienia)"
+        - "OAuth2TokenFilter → handleTokenExchangeGrant (dodać act claim, zakaz re-exchange)"
+        - "JwtAuthenticationFilter → parseToken (dodać aud/iss enforcement z flagą)"
+        - "JwtTokenProvider → generateOAuth2Token (dodać act claim)"
+        - "Liquibase seedbank (nowe klienty pluginów)"
+      summary: |
+        Gap: brak Token Exchange w pluginach, brak act claim, brak aud enforcement, tokeny w logach, sekret JWT hardcoded.
+        Istniejący wzorzec MCP (McpIntrospectionFilter, TokenExchangeClient, seed YAML) jest bezpośrednim szablonem.
+
+verification_context:
+  last_status: null
+  issues_found: []
+  fixes_applied: []
+  decisions_made: []
+  reverify_count: 0
+
+project_context:
+  project_doc_paths:
+    - ".maister/docs/project/tech-stack.md"
+    - ".maister/docs/project/architecture.md"
+    - ".maister/docs/standards/backend/security.md"
+    - ".maister/docs/standards/backend/plugin-auth.md"
+    - ".maister/docs/standards/backend/api.md"
+    - ".maister/docs/standards/backend/migrations.md"
+    - ".maister/docs/standards/testing/backend-testing.md"
+    - ".maister/docs/standards/global/error-handling.md"
+    - ".maister/docs/standards/global/minimal-implementation.md"
