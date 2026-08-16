@@ -57,8 +57,8 @@ The coding standards and conventions discovered/defined during the project live 
 Some services require environment variables. Copy the example files and fill in your API keys:
 
 ```bash
-cp litellm/.env.example litellm/.env
-cp plugins/ai-description/.env.example plugins/ai-description/.env
+cp litellm/.env litellm/.env
+cp plugins/ai-description/.env plugins/ai-description/.env
 ```
 
 Edit each `.env` file and replace placeholder values with your actual API keys. The service URLs (Langfuse, Presidio) are pre-configured for Docker and typically don't need changes.
@@ -95,3 +95,4 @@ docker compose up -d
 # 3. Start a plugin (in a separate terminal)
 cd plugins/warehouse && npm run dev
 ```
+claude --resume "logistics-plugin-implementation"                                                                                                                                                                                                                                                                                                                                                                          
